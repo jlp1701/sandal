@@ -24,52 +24,69 @@ boot:
     int 0x13
     
     lgdt [gdt_pointer] ; load the gdt table
-RM2PM:
+    sgdt [gdtp]
     mov eax, cr0 
     or eax,0x1 ; set the protected mode bit on special CPU reg cr0
     mov cr0, eax
 
     ; initializing the segment register
-    mov ax, DATA_SEG_32
+    mov ax, 0x10
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    jmp CODE_SEG_32:boot3  ; long jump to the code segment
+    jmp 0x8:boot3  ; long jump to the code segment
 
- 
-idt_real:
-    dw 0x3ff        ; 256 entries, 4b each = 1K
-    dd 0            ; Real Mode IVT @ 0x0000
- 
-savcr0:
-    dd 0            ; Storage location for pmode CR0.
+; RM2PM:
+;     cli
+;     ; Restore GDT
+;     lgdt [ss:gdtp]
+;     ; lgdt [gdt_pointer] ; load the gdt table
+
+;     mov eax, cr0 
+;     or al, 0x1 ; set the protected mode bit on special CPU reg cr0
+;     mov cr0, eax
+
+;     ; initializing the segment register
+;     mov ax, 0x10
+;     mov ds, ax
+;     mov es, ax
+;     mov fs, ax
+;     mov gs, ax
+;     mov ss, ax
+;     jmp 0x8:tjmp
+; bits 32
+; tjmp:
+;     sti
+;     ret
 
 bits 32
-Entry16:
-    ; We are already in 16-bit mode here!
- 
+PM2RMandback:
+    ; Save GDT in case BIOS overwrites it
+    sgdt [gdtp]
     cli         ; Disable interrupts.
- 
+
+    jmp 0x18:boom
     ; Need 16-bit Protected Mode GDT entries!
-    mov eax, DATA_SEG_16  ; 16-bit Protected Mode data selector.
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
-    mov ss, eax
+boom:
+bits 16
+    mov ax, 0x20  ; 16-bit Protected Mode data selector.
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
  
  
     ; Disable paging (we need everything to be 1:1 mapped).
     mov eax, cr0
     ;mov [savcr0], eax   ; save pmode CR0
-    and eax, 0x7FFFFFFe ; Disable paging bit & disable 16-bit pmode.
+    and al, 0xFE ; Disable paging bit & disable 16-bit pmode.
     mov cr0, eax
  
-    jmp CODE_SEG_16:GoRMode       ; Perform Far jump to set CS.
+    jmp 0x00:GoRMode       ; Perform Far jump to set CS.
 
-bits 16
 GoRMode:
     ;mov sp, 0x8000      ; pick a stack pointer.
     mov ax, 0       ; Reset segment registers to 0.
@@ -78,13 +95,43 @@ GoRMode:
     mov fs, ax
     mov gs, ax
     mov ss, ax
-    lidt [idt_real]
+    ; lidt [idt_real]
     sti         ; Restore interrupts -- be careful, unhandled int's will kill it.
-    call RM2PM
+    ; now we are in real mode
+    
+    ; load second sector into memory
+    mov ah, 0x2    ;read sectors
+    mov al, 1      ;sectors to read
+    mov ch, 0      ;cylinder idx
+    mov dh, 0      ;head idx
+    mov cl, 1      ;sector idx
+    mov dl, [disk] ;disk idx
+    mov bx, 0x7000;target pointer
+    int 0x13
+
+
+    cli
+    ; Restore GDT
+    lgdt [ss:gdtp]
+
+    mov eax, cr0 
+    or al, 0x1 ; set the protected mode bit on special CPU reg cr0
+    mov cr0, eax
+
+    ; initializing the segment register
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    jmp 0x8:tjmp
+bits 32
+tjmp:
+    sti
     ret
 
-disk: db 0
-
+align 4
 gdt_start:
     dq 0x0
 gdt_code_32:
@@ -102,25 +149,19 @@ gdt_data_32:
     db 11001111b
     db 0x0
 gdt_code_16:
-    ;  Limit: 0xFFFFF
-    ; Base: 0x0
-    ; 16-bit
-    ; Privilege level: 0
-    ; Granularity: 0
-    ; Read and Write: 1 
-    dw 0xFFFF   ; Limit 0:15
-    dw 0x0      ; Base  0:15
-    db 0x0      ; Base  32:39
-    db 10011010b  ; Access Byte
-    db 00001111b  ; Flags, Limit 16:19
-    db 0x0        ; Base 24:31
+    dw 0xFFFF
+    dw 0x0
+    db 0x0
+    db 10011010b
+    db 00001111b
+    db 0x0
 gdt_data_16:
-    dw 0xFFFF   ; Limit 0:15
-    dw 0x0      ; Base  0:15
-    db 0x0      ; Base  32:39
-    db 10010010b  ; Access Byte
-    db 00001111b  ; Flags, Limit 16:19
-    db 0x0        ; Base 24:31
+    dw 0xFFFF
+    dw 0x0
+    db 0x0
+    db 10010010b
+    db 00001111b
+    db 0x0
 gdt_end:
 
 gdt_pointer:
@@ -128,8 +169,6 @@ gdt_pointer:
     dd gdt_start
 CODE_SEG_32 equ gdt_code_32 - gdt_start
 DATA_SEG_32 equ gdt_data_32 - gdt_start
-CODE_SEG_16 equ gdt_code_16 - gdt_start
-DATA_SEG_16 equ gdt_data_16 - gdt_start
 
 
 times 510 - ($-$$) db 0 ; pad remaining 510 bytes with zeroes
@@ -143,7 +182,8 @@ copy_target:
 align 4
 boot3:
     mov esp, kernel_stack_top
-    call Entry16  ; test: change right back to real mode
+    call PM2RMandback  ; test: change right back to real mode
+    ; call RM2PM
     mov esi, hello
     xor ebx, ebx
     mov ebx, 0xb8000
@@ -174,10 +214,12 @@ myfunc:
 halt:
     cli
     hlt
-times 1024 - ($-$$) db 0
+;times 1024 - ($-$$) db 0
 
 section .bss
-align 4
+align 16
+disk: resb 1
+gdtp: resb 8
 kernel_stack_bottom: equ $
     resb 16384 ; 16 KiB
 kernel_stack_top:
