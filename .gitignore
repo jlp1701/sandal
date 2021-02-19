@@ -1,0 +1,5 @@
+floppy/*.bin
+floppy/*.elf
+floppy/*.o
+floppy/*.img
+floppy/*.vdi

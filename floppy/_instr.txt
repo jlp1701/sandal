@@ -1,0 +1,72 @@
+
+nasm -f bin boot3.asm -o boot3.bin
+nasm -f elf32 boot4.asm -o boot4.o
+
+qemu-system-x86_64 -fda boot.bin
+
+g++ kmain.cpp boot4.o -o kernel.bin -m32 -fno-pie -ffreestanding -std=c++11 -mno-red-zone -fno-exceptions -nostdlib -fno-rtti -Wall -Wextra -Werror -T linker.ld
+
+qemu-system-x86_64 -fda kernel.bin
+
+VBoxManage convertfromraw --format VDI kernel.img kernel.vdi
+
+dd if=/dev/zero bs=1 count=4096x100 >> kernel.img
+
+### gdb ######################################
+// set breakpoint on address and activate automatic disassembly
+break *0x8048054
+set disassemble-next-line on
+
+// change assembly flavor
+set disassembly-flavor intel
+
+// step a machine instruction
+stepi
+nexti
+
+
+# assemble as elf with symbols then link at 0x7c00 and make raw binary
+nasm -f elf32 -g3 -F dwarf main.asm -o main.o
+ld -Ttext=0x7c00 -melf_i386 main.o -o main.elf
+objcopy -O binary main.elf main.img
+
+qemu-system-i386 -hda main.img -S -s &
+gdb main.elf \
+        -ex 'target remote localhost:1234' \
+        -ex 'set architecture i8086' \
+        -ex 'layout src' \
+        -ex 'layout regs' \
+        -ex 'break main' \
+        -ex 'continue'
+
+
+# for boot3.bin
+nasm -f elf32 -g3 -F dwarf boot3.asm -o b3.o
+# ld -Ttext=0x7c00 -melf_i386 b3.o -o b3.elf
+ld -T linker2.ld b3.o -o b3.elf
+objcopy -O binary b3.elf boot3.bin
+qemu-system-i386 -hda boot3.bin -S -s &
+gdb b3.elf \
+        -ex 'target remote localhost:1234' \
+        -ex 'set architecture i8086' \
+        -ex 'layout src' \
+        -ex 'layout regs' \
+        -ex 'break boot' \
+        -ex 'continue'
+
+# for kernel.bin
+nasm -f elf32 -g3 -F dwarf boot4.asm -o b4.o
+g++ kmain.cpp -g3 -F dwarf -c -o k.o -m32 -fno-pie -ffreestanding -std=c++11 -mno-red-zone -fno-exceptions -nostdlib -fno-rtti -Wall -Wextra -Werror
+ld -T linker_kernel.ld b4.o k.o -o kernel.elf
+# ld -Ttext=0x7c00 --entry=boot -melf_i386 b4.o k.o -o kernel.elf
+objcopy -O binary kernel.elf kernel.bin
+
+# run kernel.bin with qemu and load debug symbols of kernel.elf into gdb and connect 
+qemu-system-i386 -hda kernel.bin -S -s &
+gdb kernel.elf \
+        -ex 'target remote localhost:1234' \
+        -ex 'set architecture i8086' \
+        -ex 'layout src' \
+        -ex 'layout regs' \
+        -ex 'break boot' \
+        -ex 'continue'
