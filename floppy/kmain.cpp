@@ -1,7 +1,7 @@
 #define VGA_ROWS    25
 #define VGA_COLS    80
 #define PAD_CHAR    0x30    // padding char for text console; 0x30 = space
-extern "C" char myfunc(char t, char u);
+extern "C" void ReadSectorFromDisk(unsigned long numToRead, unsigned long head, unsigned long sector, unsigned long cylinder, unsigned int targetAddr);
 
 struct VgaBuffer {
     unsigned short buf[VGA_ROWS][VGA_COLS];
@@ -61,6 +61,8 @@ extern "C" void kmain()
     unsigned short* vga = (unsigned short*)0xb8000;
     for (int i = 0; i<16;++i)
         vga[i+80] = color | hello[i];
+
+    ReadSectorFromDisk(1, 0, 1, 0, 0xE000);
 
     initBuffer(&vgaBuffer, ' ');
     printBuffer(&vgaBuffer);

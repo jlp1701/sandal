@@ -15,7 +15,7 @@ boot:
     
     ; load second sector into memory
     mov ah, 0x2    ;read sectors
-    mov al, 6      ;sectors to read
+    mov al, 6         ;sectors to read
     mov ch, 0      ;cylinder idx
     mov dh, 0      ;head idx
     mov cl, 2      ;sector idx
@@ -62,7 +62,32 @@ boot:
 ;     ret
 
 bits 32
-PM2RMandback:
+global ReadSectorFromDisk  ; (unsigned long numToRead, unsigned long head, unsigned long sector, unsigned long cylinder, unsigned int targetAddr)
+ReadSectorFromDisk:
+    ; +0x18: [  targetAddr ]
+    ; +0x14: [  cylinder ]
+    ; +0x10: [  sector ]
+    ;  +0xC: [  head ]
+    ;  +0x8: [  numToRead]
+    ;  +0x4: [  retAddr]
+    ;     0: [  ebp  ]
+    ;
+    push ebp
+    mov ebp, esp
+    ; save all paramters, esp and ebp outside of stack
+    mov eax, [ebp+0x8]
+    mov [cpy_numToRead], eax
+    mov eax, [ebp+0xC]
+    mov [cpy_head], eax
+    mov eax, [ebp+0x10]
+    mov [cpy_sector], eax
+    mov eax, [ebp+0x14]
+    mov [cpy_cylinder], eax
+    mov eax, [ebp+0x18]
+    mov [cpy_targetAddr], eax
+    mov [cpy_esp], esp
+    mov [cpy_ebp], ebp
+
     ; Save GDT in case BIOS overwrites it
     sgdt [gdtp]
     cli         ; Disable interrupts.
@@ -101,14 +126,13 @@ GoRMode:
     
     ; load second sector into memory
     mov ah, 0x2    ;read sectors
-    mov al, 1      ;sectors to read
-    mov ch, 0      ;cylinder idx
-    mov dh, 0      ;head idx
-    mov cl, 1      ;sector idx
+    mov al, byte [cpy_numToRead]      ;sectors to read
+    mov ch, byte [cpy_cylinder]      ;cylinder idx
+    mov dh, byte [cpy_head]      ;head idx
+    mov cl, byte [cpy_sector]      ;sector idx
     mov dl, [disk] ;disk idx
-    mov bx, 0x7000;target pointer
+    mov bx, word [cpy_targetAddr];target pointer
     int 0x13
-
 
     cli
     ; Restore GDT
@@ -129,6 +153,10 @@ GoRMode:
 bits 32
 tjmp:
     sti
+    ; restore esp and ebp in case they are overwritten
+    mov esp, [cpy_esp]
+    mov ebp, [cpy_ebp]
+    leave
     ret
 
 align 4
@@ -182,7 +210,8 @@ copy_target:
 align 4
 boot3:
     mov esp, kernel_stack_top
-    call PM2RMandback  ; test: change right back to real mode
+    mov ebp, esp
+    ;call ReadSectorFromDisk  ; test: change right back to real mode
     ; call RM2PM
     mov esi, hello
     xor ebx, ebx
@@ -218,10 +247,18 @@ halt:
 
 section .bss
 align 16
-disk: resb 1
+disk: resd 1
 gdtp: resb 8
+; space for ReadSectorFromDisk parameter when in RealMode
+cpy_esp: resd 1
+cpy_ebp: resd 1
+cpy_numToRead: resd 1
+cpy_head: resd 1
+cpy_sector: resd 1
+cpy_cylinder: resd 1
+cpy_targetAddr: resd 1
 kernel_stack_bottom: equ $
-    resb 16384 ; 16 KiB
+    resb 8192 ; 8 KiB
 kernel_stack_top:
 
 section .data

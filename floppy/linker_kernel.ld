@@ -12,10 +12,12 @@ SECTIONS {
     {
         *(.rodata)
     }
+
     .data :
     {
         *(.data)
     }
+    . = 0xA000;
     .bss :
     {
         *(.bss)
