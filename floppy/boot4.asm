@@ -62,13 +62,12 @@ boot:
 ;     ret
 
 bits 32
-global ReadSectorFromDisk  ; (unsigned long numToRead, unsigned long head, unsigned long sector, unsigned long cylinder, unsigned int targetAddr)
-ReadSectorFromDisk:
-    ; +0x18: [  targetAddr ]
-    ; +0x14: [  cylinder ]
-    ; +0x10: [  sector ]
-    ;  +0xC: [  head ]
-    ;  +0x8: [  numToRead]
+global Disk_IO
+Disk_IO:
+    ; +0x14: [  addr ]
+    ; +0x10: [  chs ]
+    ;  +0xC: [  numSectors ]
+    ;  +0x8: [  action ]
     ;  +0x4: [  retAddr]
     ;     0: [  ebp  ]
     ;
@@ -76,15 +75,13 @@ ReadSectorFromDisk:
     mov ebp, esp
     ; save all paramters, esp and ebp outside of stack
     mov eax, [ebp+0x8]
-    mov [cpy_numToRead], eax
+    mov [cpy_action], eax
     mov eax, [ebp+0xC]
-    mov [cpy_head], eax
+    mov [cpy_numSectors], eax
     mov eax, [ebp+0x10]
-    mov [cpy_sector], eax
+    mov [cpy_chs], eax
     mov eax, [ebp+0x14]
-    mov [cpy_cylinder], eax
-    mov eax, [ebp+0x18]
-    mov [cpy_targetAddr], eax
+    mov [cpy_addr], eax
     mov [cpy_esp], esp
     mov [cpy_ebp], ebp
 
@@ -121,20 +118,26 @@ GoRMode:
     mov gs, ax
     mov ss, ax
     ; lidt [idt_real]
-    sti         ; Restore interrupts -- be careful, unhandled int's will kill it.
+    ; sti         ; Restore interrupts -- be careful, unhandled int's will kill it.
     ; now we are in real mode
     
-    ; load second sector into memory
-    mov ah, 0x2    ;read sectors
-    mov al, byte [cpy_numToRead]      ;sectors to read
-    mov ch, byte [cpy_cylinder]      ;cylinder idx
-    mov dh, byte [cpy_head]      ;head idx
-    mov cl, byte [cpy_sector]      ;sector idx
+    ; prepare BIOS call to read from disk
+    mov byte [ret_val], 0  ; clear return value
+    mov ah, byte [cpy_action]    ; action: 0x02 = read sectors, 0x03 = write sectors
+    mov al, byte [cpy_numSectors]      ;sectors to read
+    mov cx, word [cpy_chs + 2]      ;cylinder and sector 
+    mov dh, byte [cpy_chs]      ;head idx
     mov dl, [disk] ;disk idx
-    mov bx, word [cpy_targetAddr];target pointer
+    mov bx, word [cpy_addr];target pointer
     int 0x13
+    jc bios_call_err
+    jmp GoPMode
 
-    cli
+bios_call_err:
+    mov [ret_val], ah  ; save error code
+
+GoPMode:
+    ; cli
     ; Restore GDT
     lgdt [ss:gdtp]
 
@@ -152,10 +155,12 @@ GoRMode:
     jmp 0x8:tjmp
 bits 32
 tjmp:
-    sti
+    ; sti
     ; restore esp and ebp in case they are overwritten
     mov esp, [cpy_esp]
     mov ebp, [cpy_ebp]
+    xor eax, eax
+    mov al, byte [ret_val]  ; bring back saved return value
     leave
     ret
 
@@ -209,6 +214,7 @@ copy_target:
     hello: db "ABC",0
 align 4
 boot3:
+    cli ; otherwise timer interrupt kills program
     mov esp, kernel_stack_top
     mov ebp, esp
     ;call ReadSectorFromDisk  ; test: change right back to real mode
@@ -252,13 +258,11 @@ gdtp: resb 8
 ; space for ReadSectorFromDisk parameter when in RealMode
 cpy_esp: resd 1
 cpy_ebp: resd 1
-cpy_numToRead: resd 1
-cpy_head: resd 1
-cpy_sector: resd 1
-cpy_cylinder: resd 1
-cpy_targetAddr: resd 1
+cpy_action: resd 1
+cpy_numSectors: resd 1
+cpy_chs: resd 1
+cpy_addr: resd 1
+ret_val:    resd 1
 kernel_stack_bottom: equ $
     resb 8192 ; 8 KiB
 kernel_stack_top:
-
-section .data
