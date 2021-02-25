@@ -64,9 +64,7 @@ boot:
 bits 32
 global Disk_IO
 Disk_IO:
-    ; +0x14: [  addr ]
-    ; +0x10: [  chs ]
-    ;  +0xC: [  numSectors ]
+    ;  +0xC: [  DAP pointer ]
     ;  +0x8: [  action ]
     ;  +0x4: [  retAddr]
     ;     0: [  ebp  ]
@@ -77,11 +75,8 @@ Disk_IO:
     mov eax, [ebp+0x8]
     mov [cpy_action], eax
     mov eax, [ebp+0xC]
-    mov [cpy_numSectors], eax
-    mov eax, [ebp+0x10]
-    mov [cpy_chs], eax
-    mov eax, [ebp+0x14]
-    mov [cpy_addr], eax
+    mov [cpy_dap_ptr], eax
+
     mov [cpy_esp], esp
     mov [cpy_ebp], ebp
 
@@ -124,11 +119,8 @@ GoRMode:
     ; prepare BIOS call to read from disk
     mov byte [ret_val], 0  ; clear return value
     mov ah, byte [cpy_action]    ; action: 0x02 = read sectors, 0x03 = write sectors
-    mov al, byte [cpy_numSectors]      ;sectors to read
-    mov cx, word [cpy_chs + 2]      ;cylinder and sector 
-    mov dh, byte [cpy_chs]      ;head idx
+    mov si, [cpy_dap_ptr]
     mov dl, [disk] ;disk idx
-    mov bx, word [cpy_addr];target pointer
     int 0x13
     jc bios_call_err
     jmp GoPMode
@@ -259,9 +251,7 @@ gdtp: resb 8
 cpy_esp: resd 1
 cpy_ebp: resd 1
 cpy_action: resd 1
-cpy_numSectors: resd 1
-cpy_chs: resd 1
-cpy_addr: resd 1
+cpy_dap_ptr: resd 1
 ret_val:    resd 1
 kernel_stack_bottom: equ $
     resb 8192 ; 8 KiB

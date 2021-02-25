@@ -33,9 +33,9 @@ SECTIONS {
         prog.o(.data)
         prog.o(.bss)
     }
-    . = 0x00100200-1;
+    . = 0x00100400-1;
     .bla : 
     {
-        BYTE(0xAA)
+        BYTE(0xDD)
     }
 }

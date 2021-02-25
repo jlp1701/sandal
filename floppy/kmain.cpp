@@ -1,23 +1,32 @@
 #define VGA_ROWS    25
 #define VGA_COLS    80
 #define PAD_CHAR    0x30    // padding char for text console; 0x30 = space
-#define DISK_READ   0x02
-#define DISK_WRITE  0x03
+#define DISK_READ   0x42
+#define DISK_WRITE  0x43
 #define NUM_CYLINDERS   1024
 #define NUM_HEADS       255
 #define NUM_SECTORS     63
 #define BYTES_PER_SEC   512
 #define TMP_BUF_ADDR    0xF000  // temporary buffer for one sector while in 16bit mode
-extern "C" char Disk_IO(unsigned long action,
-                        unsigned long numSectors,
-                        unsigned long chs,
-                        unsigned int addr);
 
 struct __attribute__((__packed__)) VgaBuffer {
     unsigned short buf[VGA_ROWS][VGA_COLS];
     unsigned short curRow;
     char padChar;
 };
+
+struct __attribute__((__packed__)) DapStruct {
+    unsigned char size;
+    unsigned char pad;
+    unsigned short numSectors;
+    unsigned short offset;
+    unsigned short segment;
+    unsigned long lba_lower;
+    unsigned long lba_higher;
+};
+
+extern "C" char Disk_IO(unsigned long action,
+                        DapStruct* dap);
 
 void lineToBuffer(VgaBuffer* vgaBuf, const char* strLine) {
     const unsigned short color = 0xF00;  // predefined color
@@ -99,8 +108,16 @@ unsigned long lba2chs(unsigned long lba) {
 
 char readDiskSectors(unsigned long lbaBegin, unsigned long numSec, void* destAddr) {    
     char err = 0;
+    DapStruct dap;
     for (unsigned long i = 0; i < numSec; i++) {
-        err = Disk_IO(DISK_READ, 1, lba2chs(lbaBegin + i), TMP_BUF_ADDR);
+        dap.size = 16;
+        dap.pad = 0;
+        dap.numSectors = 1;
+        dap.offset = (unsigned short)TMP_BUF_ADDR;
+        dap.segment = 0;
+        dap.lba_lower = lbaBegin + i;
+        dap.lba_higher = 0;
+        err = Disk_IO(DISK_READ, &dap);
         if (err) {
             return err;
         }
@@ -115,8 +132,8 @@ extern "C" void kmain()
     const short color = 0x0F00;
     const char* hello = "Hello cpp world!";
     unsigned short* vga = (unsigned short*)0xb8000;
-    // unsigned long lba_prog = 1986;
-    unsigned long lba_prog = 1008;
+    unsigned long lba_prog = 1986;
+    unsigned long numSec = 2;
     void* targetAddr = (void*)0x00100000;
     // unsigned long size = 4096;
 
@@ -128,9 +145,12 @@ extern "C" void kmain()
     printBuffer(&vgaBuffer);
 
     printStr(&vgaBuffer, "Load prog ...");
-    if (readDiskSectors(lba_prog, 1, targetAddr) != 0) {
+    if (readDiskSectors(lba_prog, numSec, targetAddr) != 0) {
         printStr(&vgaBuffer, "Error while trying to load prog.");
         return;
+    }
+    if (*((unsigned char*)targetAddr + numSec * BYTES_PER_SEC - 1) != 0xDD) {
+        printStr(&vgaBuffer, "Invalid signature of prog sectors.");
     }
     printStr(&vgaBuffer, "Prog loaded");
     
