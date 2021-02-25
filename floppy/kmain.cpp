@@ -6,6 +6,8 @@
 #define NUM_CYLINDERS   1024
 #define NUM_HEADS       255
 #define NUM_SECTORS     63
+#define BYTES_PER_SEC   512
+#define TMP_BUF_ADDR    0xF000  // temporary buffer for one sector while in 16bit mode
 extern "C" char Disk_IO(unsigned long action,
                         unsigned long numSectors,
                         unsigned long chs,
@@ -77,9 +79,11 @@ void printStr(VgaBuffer* vgaBuf, const char* str) {
     printBuffer(vgaBuf);
 }
 
-// struct __attribute__((__packed__)) ChsStruct {
-//     short
-// };
+void memcpy(void* dest, void* src, unsigned long num) {
+    for (unsigned long i = 0; i < num; i++) {
+        *((char*)dest + i) = *((char*)src + i);
+    }
+}
 
 // translates linear block address (LBA) to cylinder, head, sector (CHS)
 unsigned long lba2chs(unsigned long lba) {
@@ -93,15 +97,29 @@ unsigned long lba2chs(unsigned long lba) {
     return chs;
 }
 
+char readDiskSectors(unsigned long lbaBegin, unsigned long numSec, void* destAddr) {    
+    char err = 0;
+    for (unsigned long i = 0; i < numSec; i++) {
+        err = Disk_IO(DISK_READ, 1, lba2chs(lbaBegin + i), TMP_BUF_ADDR);
+        if (err) {
+            return err;
+        }
+        memcpy((char*)destAddr + i * BYTES_PER_SEC, (void*)TMP_BUF_ADDR, BYTES_PER_SEC);
+    }
+    return 0;
+}
+
 extern "C" void kmain()
 {
     static VgaBuffer vgaBuffer;
     const short color = 0x0F00;
     const char* hello = "Hello cpp world!";
     unsigned short* vga = (unsigned short*)0xb8000;
-    // // char bios_ret = 0;
+    // unsigned long lba_prog = 1986;
+    unsigned long lba_prog = 1008;
+    void* targetAddr = (void*)0x00100000;
+    // unsigned long size = 4096;
 
-    // delay(100000000);
     for (int i = 0; i<16;++i)
         vga[i+80] = color | hello[i];
 
@@ -109,46 +127,25 @@ extern "C" void kmain()
     initBuffer(&vgaBuffer, ' ');
     printBuffer(&vgaBuffer);
 
-    // lineToBuffer(&vgaBuffer, bla);
-    // lineToBuffer(&vgaBuffer, hello);
-    // lineToBuffer(&vgaBuffer, "adadasasdasdasdasdadasadadasasdasdasdasdadadasasdasdasdasdadasadadasasdasdasdasturadadasasdasdasdasdadasadadasasdasdasdasdadadasasdasdasdasdadasadadasasdasdasdastur");
-    // lineToBuffer(&vgaBuffer, "abc");
-    // char c = '0';
-    // for (int i = 0; i < 25; i++) {
-    //     c = 'a' + i;
-    //     printStr(&vgaBuffer, (const char*)&c);
-    // }
+    printStr(&vgaBuffer, "Load prog ...");
+    if (readDiskSectors(lba_prog, 1, targetAddr) != 0) {
+        printStr(&vgaBuffer, "Error while trying to load prog.");
+        return;
+    }
+    printStr(&vgaBuffer, "Prog loaded");
+    
+    asm("call 0x00100000");
 
-    // printStr(&vgaBuffer, "Begin disk read check ...");
-    // for (int i = 0; i < 256; i++) {
-    //     printStr(&vgaBuffer, "Error when trying to read from disk.");    
+    // // check if sectors read are equal
+    // char* a = (char*)0xE000;
+    // char* b = (char*)0x00100000;
+    // for (int i = 0; i < 512; i++) {
+    //     if (*(a+i) != *(b+i)) {
+    //         printStr(&vgaBuffer, "Memory content is not equal!");
+    //         break;
+    //     }
     // }
     // printStr(&vgaBuffer, "Disk read check finished.");
-
-    printStr(&vgaBuffer, "Begin disk read check ...");
-    if (Disk_IO(DISK_READ, 1, lba2chs(48321), 0xE000) != 0) {
-        printStr(&vgaBuffer, "Error when trying to read from disk.");
-        return;
-    }
-    if (*(unsigned short*)(0xE000+510) != 0xAA55) {
-        printStr(&vgaBuffer, "Invalid MBR signature.");
-        // return;
-    }
-
-    if (Disk_IO(DISK_READ, 1, lba2chs(48321), 0xF000) != 0) {
-        printStr(&vgaBuffer, "Error when trying to read from disk.");
-        return;
-    }
-    // check if sectors read are equal
-    char* a = (char*)0xE000;
-    char* b = (char*)0xF000;
-    for (int i = 0; i < 256; i++) {
-        if (*(a+i) != *(b+i)) {
-            printStr(&vgaBuffer, "Memory content is not equal!");
-            break;
-        }
-    }
-    printStr(&vgaBuffer, "Disk read check finished.");
 }
 
 

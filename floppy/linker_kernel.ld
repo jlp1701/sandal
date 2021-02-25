@@ -10,16 +10,32 @@ SECTIONS {
     }
     .rodata :
     {
-        *(.rodata)
+        b4.o(.rodata)
+        k.o(.rodata)
     }
 
     .data :
     {
-        *(.data)
+        b4.o(.data)
+        k.o(.data)
     }
     . = 0xA000;
     .bss :
     {
-        *(.bss)
+        b4.o(.bss)
+        k.o(.bss)
+    }
+    . = 0x00100000;
+    .prog : 
+    {
+        prog.o(.text)
+        prog.o(.rodata)
+        prog.o(.data)
+        prog.o(.bss)
+    }
+    . = 0x00100200-1;
+    .bla : 
+    {
+        BYTE(0xAA)
     }
 }
