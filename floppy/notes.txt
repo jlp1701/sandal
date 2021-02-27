@@ -1,0 +1,56 @@
+g++ prog.cpp -O0 -g3 -F dwarf -c -o prog.o -m32 -fno-pie -ffreestanding -std=c++11 -mno-red-zone -fno-exceptions -nostdlib -fno-rtti -Wall -Wextra -Werror
+ld -T linker_prog.ld prog.o -o prog.elf
+objcopy -O binary prog.elf prog.bin
+
+qemu-img create -f raw ubuntu.img 10G
+qemu-system-x86_64 -cdrom /home/burndi/Downloads/ubuntu-20.04-desktop-amd64.iso  -cpu host -enable-kvm -m 2048 -smp 1 -drive file=ubuntu.img,format=raw
+
+qemu-system-x86_64  \
+	-cpu host \
+	-enable-kvm \
+	-m 2048 \
+	-smp 1 \
+	-no-reboot \
+	-no-shutdown \
+	-S \
+	-s \
+	-drive file=ubuntu.img,format=raw &
+
+qemu-system-x86_64 -m 1024 -machine type=pc,accel=kvm -drive format=raw,file=ubuntu.img
+
+qemu-system-i386  \
+	-cpu host \
+	-enable-kvm \
+	-m 2048 \
+	-smp 1 \
+	-no-reboot \
+	-no-shutdown \
+	-S \
+	-s \
+	-drive file=ubuntu.img,format=raw &
+
+gdb ubuntu.elf \
+	        -ex 'target remote localhost:1234' \
+	        -ex 'set architecture i8086' \
+	        -ex 'set disassembly-flavor intel' \
+	        -ex 'layout src' \
+	        -ex 'layout regs' \
+	        -ex 'break boot' \
+	        -ex 'continue'
+
+
+// copy stage 0 code
+dd conv=notrunc if=kernel.bin of=ubuntu.img bs=1 count=445
+
+// copy stage 1 code
+dd conv=notrunc if=kernel.bin skip=1 of=ubuntu.img seek=1 bs=512 count=7
+
+// copy linux kernel
+dd conv=notrunc if=vmlinuz-5.8.0-44-generic of=ubuntu.img seek=1048576 bs=1
+
+278549  (40) vmlinuz-5.8.0-44-generic
+
+1036167
+
+9735840
+19016

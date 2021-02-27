@@ -6,5 +6,4 @@ extern "C" void prog()
  
     for (int i = 0; i<20;++i)
         vga[i+80] = color | hello[i];
-    asm("hlt");
 }

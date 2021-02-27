@@ -15,7 +15,7 @@ boot:
     
     ; load second sector into memory
     mov ah, 0x2    ;read sectors
-    mov al, 6         ;sectors to read
+    mov al, 7         ;sectors to read
     mov ch, 0      ;cylinder idx
     mov dh, 0      ;head idx
     mov cl, 2      ;sector idx
@@ -228,16 +228,58 @@ cpp:
     call kmain
     jmp halt
 
-global myfunc
-myfunc:
+global callKernel
+callKernel:
+    ;  +0x10: [  real_mode_and_heap_size ]
+    ;  +0xC: [  kernel_entry_seg ]
+    ;  +0x8: [  real_mode_code_seg ]
+    ;  +0x4: [  retAddr]
+    ;     0: [  ebp  ]
+    ;
     push ebp
     mov ebp, esp
-    xor eax, eax
-    mov al, byte [ebp+8]
-    add al, byte [ebp+12]
-    leave
-    ret
+    ; save all paramters, esp and ebp outside of stack
+    ; mov eax, [ebp+0x8]
+    ; mov [cpy_action], eax
+    ; mov eax, [ebp+0xC]
+    ; mov [cpy_dap_ptr], eax
+    ; mov [cpy_esp], esp
+    ; mov [cpy_ebp], ebp
 
+    cli         ; Disable interrupts.
+    jmp 0x18:boom2
+    ; Need 16-bit Protected Mode GDT entries!
+boom2:
+bits 16
+    mov ax, 0x20  ; 16-bit Protected Mode data selector.
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+ 
+    mov eax, cr0
+    and al, 0xFE ; Disable paging bit & disable 16-bit pmode.
+    mov cr0, eax
+ 
+    jmp 0x00:GoRMode2       ; Perform Far jump to set CS.
+
+GoRMode2:
+    mov ax, 0x900
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    mov esp, 0xE000
+
+    ; push 0x9020
+    ; push 0
+    ; retf
+    jmp 0x920:0
+
+bits 32
 halt:
     cli
     hlt
@@ -256,3 +298,7 @@ ret_val:    resd 1
 kernel_stack_bottom: equ $
     resb 8192 ; 8 KiB
 kernel_stack_top:
+global tmp_buffer_ptr
+tmp_buffer_ptr: equ $ 
+    resb 512
+tmp_buffer_ptr_end:
