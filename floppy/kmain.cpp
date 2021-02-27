@@ -191,7 +191,7 @@ extern "C" void kmain()
         sects = 4;
     }
     printStr(&vgaBuffer, "Load linux real-mode code ...");
-    if (readDiskSectors(lba_prog, sects + 1/*40*/, (char*)lbhAddr) != 0) {
+    if (readDiskSectors(lba_prog + 1, sects/*40*/, (char*)lbhAddr + 512) != 0) {
         printStr(&vgaBuffer, "Error while trying to load linux real-mode code.");
         return;
     }
@@ -199,7 +199,8 @@ extern "C" void kmain()
 
     // set neccessary parameters of kernel boot sector
     // set type of loader to 0xFF (= undefined)
-    *(((unsigned char*)lbhAddr) + 0x210) = 0xFF;
+    *(((unsigned char*)lbhAddr) + 0x210) = 0xFF;  // loader type
+    // *(((unsigned char*)lbhAddr) + 0x227) = 0x11;  // extended loader type
 
     // get loadflags
     unsigned char loadflags;
@@ -217,16 +218,24 @@ extern "C" void kmain()
     *(unsigned short*)(((unsigned char*)lbhAddr) + 0x224) = real_mode_and_heap_size - 0x200;
 
     // set command line to "auto" and set pointer
-    *(((char*)lbhAddr) + 0x10000 + 0) = 'a';
-    *(((char*)lbhAddr) + 0x10000 + 1) = 'u';
-    *(((char*)lbhAddr) + 0x10000 + 2) = 't';
-    *(((char*)lbhAddr) + 0x10000 + 3) = 'o';
-    *(((char*)lbhAddr) + 0x10000 + 4) = 0;
-    *(unsigned long*)(((unsigned char*)lbhAddr) + 0x228) = (unsigned long)lbhAddr + 0x10000;    
+    const char* cmd_line = "root=/dev/sda2 S";
+    // *(((char*)lbhAddr) + 0x10000 + 0) = 'a';
+    // *(((char*)lbhAddr) + 0x10000 + 1) = 'u';
+    // *(((char*)lbhAddr) + 0x10000 + 2) = 't';
+    // *(((char*)lbhAddr) + 0x10000 + 3) = 'o';
+    // *(((char*)lbhAddr) + 0x10000 + 4) = 0;
+    memcpy(((char*)lbhAddr) + 0x10000, (void*)cmd_line, 17);
+    *(unsigned long*)(((unsigned char*)lbhAddr) + 0x228) = (unsigned long)lbhAddr + 0x10000;
+
+    // get size of protected mode code
+    numSec = *(unsigned long*)(((unsigned char*)lbhAddr) + 0x1F4);
+    numSec <<= 4;  // now the size is in bytes
+    numSec /= 512;  // now its in sectors
+    numSec += 1;
 
     // load protected-mode kernel
     printStr(&vgaBuffer, "Load linux 32bit kernel ...");
-    if (readDiskSectors(lba_prog + sects, numSec - sects, protKernelAddr) != 0) {
+    if (readDiskSectors(lba_prog + sects + 1, numSec, protKernelAddr) != 0) {
         printStr(&vgaBuffer, "Error while trying to load linux 32bit kernel.");
         return;
     }
