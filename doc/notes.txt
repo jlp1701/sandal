@@ -47,10 +47,3 @@ dd conv=notrunc if=kernel.bin skip=1 of=ubuntu.img seek=1 bs=512 count=7
 
 // copy linux kernel
 dd conv=notrunc if=vmlinuz-5.8.0-44-generic of=ubuntu.img seek=1048576 bs=1
-
-278549  (40) vmlinuz-5.8.0-44-generic
-
-1036167
-
-9735840
-19016

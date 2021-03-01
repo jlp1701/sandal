@@ -1,8 +1,7 @@
 section .text ; do not change name of section: breaks gdb debugging symbols
 
-
+; org does not have to be defined here: it is defined in the linker script
 bits 16
-; org 0x7c00
 global boot
 boot:
     mov ax, 0x2401
@@ -38,29 +37,6 @@ boot:
     mov ss, ax
     jmp 0x8:boot3  ; long jump to the code segment
 
-; RM2PM:
-;     cli
-;     ; Restore GDT
-;     lgdt [ss:gdtp]
-;     ; lgdt [gdt_pointer] ; load the gdt table
-
-;     mov eax, cr0 
-;     or al, 0x1 ; set the protected mode bit on special CPU reg cr0
-;     mov cr0, eax
-
-;     ; initializing the segment register
-;     mov ax, 0x10
-;     mov ds, ax
-;     mov es, ax
-;     mov fs, ax
-;     mov gs, ax
-;     mov ss, ax
-;     jmp 0x8:tjmp
-; bits 32
-; tjmp:
-;     sti
-;     ret
-
 bits 32
 global Disk_IO
 Disk_IO:
@@ -95,7 +71,6 @@ bits 16
     mov fs, ax
     mov gs, ax
     mov ss, ax
- 
  
     ; Disable paging (we need everything to be 1:1 mapped).
     mov eax, cr0
