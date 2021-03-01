@@ -71,6 +71,7 @@ Disk_IO:
     ;
     push ebp
     mov ebp, esp
+    pusha
     ; save all paramters, esp and ebp outside of stack
     mov eax, [ebp+0x8]
     mov [cpy_action], eax
@@ -151,6 +152,7 @@ tjmp:
     ; restore esp and ebp in case they are overwritten
     mov esp, [cpy_esp]
     mov ebp, [cpy_ebp]
+    popa
     xor eax, eax
     mov al, byte [ret_val]  ; bring back saved return value
     leave
@@ -202,35 +204,18 @@ dw 0xaa55 ; magic bootloader magic - marks this 512 byte sector bootable!
 bits 32
 align 4
 copy_target:
-    ; hello: db "Hello more than 512 bytes world!!",0
-    hello: db "ABC",0
-align 4
 boot3:
     cli ; otherwise timer interrupt kills program
     mov esp, kernel_stack_top
     mov ebp, esp
-    ;call ReadSectorFromDisk  ; test: change right back to real mode
-    ; call RM2PM
-    mov esi, hello
-    xor ebx, ebx
-    mov ebx, 0xb8000
-.loop:
-    lodsb
-    or al,al
-    jz cpp
-    or eax,0x0F00
-    mov word [ebx], ax
-    add ebx,2
-    jmp .loop
 
-cpp:
     extern kmain
     call kmain
     jmp halt
 
 global callKernel
 callKernel:
-    ;  +0x10: [  real_mode_and_heap_size ]
+    ; +0x10: [  real_mode_and_heap_size ]
     ;  +0xC: [  kernel_entry_seg ]
     ;  +0x8: [  real_mode_code_seg ]
     ;  +0x4: [  retAddr]
@@ -239,12 +224,12 @@ callKernel:
     push ebp
     mov ebp, esp
     ; save all paramters, esp and ebp outside of stack
-    ; mov eax, [ebp+0x8]
-    ; mov [cpy_action], eax
-    ; mov eax, [ebp+0xC]
-    ; mov [cpy_dap_ptr], eax
-    ; mov [cpy_esp], esp
-    ; mov [cpy_ebp], ebp
+    mov eax, [ebp+0x8]
+    mov [cpy_rm_code_seg], ax
+    mov eax, [ebp+0xC]
+    mov [cpy_k_entry_seg], ax
+    mov eax, [ebp+0x10]
+    mov [cpy_rm_and_heap_size], ax
 
     cli         ; Disable interrupts.
     jmp 0x18:boom2
@@ -265,19 +250,24 @@ bits 16
     jmp 0x00:GoRMode2       ; Perform Far jump to set CS.
 
 GoRMode2:
-    mov ax, 0x900
+    xor eax, eax
+    xor ebx, ebx
+    xor ecx, ecx
+    mov ax, word [cpy_rm_code_seg]
+    mov bx, word [cpy_k_entry_seg]
+    mov cx, word [cpy_rm_and_heap_size]
     mov ds, ax
     mov es, ax
     mov fs, ax
     mov gs, ax
     mov ss, ax
 
-    mov esp, 0xE000
+    mov sp, cx
 
-    ; push 0x9020
-    ; push 0
-    ; retf
-    jmp 0x920:0
+    push bx
+    push 0
+    retf
+    ;jmp [cpy_k_entry_seg]:0
 
 bits 32
 halt:
@@ -295,6 +285,9 @@ cpy_ebp: resd 1
 cpy_action: resd 1
 cpy_dap_ptr: resd 1
 ret_val:    resd 1
+cpy_rm_and_heap_size: resd 1
+cpy_k_entry_seg: resd 1
+cpy_rm_code_seg: resd 1
 kernel_stack_bottom: equ $
     resb 8192 ; 8 KiB
 kernel_stack_top:

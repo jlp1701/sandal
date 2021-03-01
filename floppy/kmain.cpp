@@ -1,13 +1,16 @@
 #define VGA_ROWS    25
 #define VGA_COLS    80
-#define PAD_CHAR    0x30    // padding char for text console; 0x30 = space
 #define DISK_READ   0x42
 #define DISK_WRITE  0x43
-#define NUM_CYLINDERS   1024
-#define NUM_HEADS       255
-#define NUM_SECTORS     63
 #define BYTES_PER_SEC   512
-#define HEAP_SIZE       0x6000
+
+// user defined variables
+#define LBA_KERNEL          2048
+#define RM_KERNEL_BASE_PTR  0x9000
+#define HEAP_SIZE           0x6000
+#define PM_KERNEL_ADDR      0x100000
+#define KERNEL_CMD_LINE     "root=/dev/sda2 S"
+
 struct __attribute__((__packed__)) VgaBuffer {
     unsigned short buf[VGA_ROWS][VGA_COLS];
     unsigned short curRow;
@@ -34,14 +37,14 @@ struct __attribute__((__packed__)) LinuxBootHeaderStruct {
     unsigned short boot_flag;
 };
 
-extern "C" char Disk_IO(unsigned long action,
-                        DapStruct* dap);
+extern "C" __attribute__((__cdecl__)) char Disk_IO(const unsigned long action,
+                        const DapStruct* dap);
 
-extern "C" void callKernel(unsigned short real_mode_code_seg,
-                            unsigned short kernel_entry_seg,
-                            unsigned long real_mode_and_heap_size);
+extern "C" __attribute__((__cdecl__)) void callKernel(const unsigned short real_mode_code_seg,
+                           const unsigned short kernel_entry_seg,
+                           const unsigned long real_mode_and_heap_size);
 
-extern "C" unsigned long tmp_buffer_ptr;
+extern "C" const unsigned long tmp_buffer_ptr;
 
 void lineToBuffer(VgaBuffer* vgaBuf, const char* strLine) {
     const unsigned short color = 0xF00;  // predefined color
@@ -67,20 +70,13 @@ void lineToBuffer(VgaBuffer* vgaBuf, const char* strLine) {
     }
 }
 
-void initBuffer(VgaBuffer* vgaBuf, char pad) {
+void initBuffer(VgaBuffer* vgaBuf, const char pad) {
     const unsigned short color = 0xF00;  // predefined color
     vgaBuf->padChar = pad;
     for (unsigned short r = 0; r < VGA_ROWS; r++) {
         for (unsigned short c = 0; c < VGA_COLS; c++) {
             vgaBuf->buf[r][c] = color | (unsigned short)pad;
         }
-    }
-}
-
-void delay(unsigned long c) {
-    volatile unsigned long t = 0;
-    for (unsigned long i = 0; i < c; i++) {
-        t++;
     }
 }
 
@@ -92,7 +88,6 @@ void printBuffer(VgaBuffer* vgaBuf) {
             if (r_off >= VGA_ROWS)
                 r_off = 0;
             vga[r * VGA_COLS + c] = (unsigned short)vgaBuf->buf[r_off][c];
-            //delay(1000000);
         }
         r_off++;
     }
@@ -103,25 +98,13 @@ void printStr(VgaBuffer* vgaBuf, const char* str) {
     printBuffer(vgaBuf);
 }
 
-void memcpy(void* dest, void* src, unsigned long num) {
+void memcpy(const void* dest, const void* src, const unsigned long num) {
     for (unsigned long i = 0; i < num; i++) {
         *((char*)dest + i) = *((char*)src + i);
     }
 }
 
-// translates linear block address (LBA) to cylinder, head, sector (CHS)
-unsigned long lba2chs(unsigned long lba) {
-    unsigned short c = lba / NUM_HEADS / NUM_SECTORS;
-    unsigned short h = lba / NUM_SECTORS - c * NUM_HEADS;
-    unsigned short s = lba - (NUM_SECTORS * (c * NUM_HEADS + h)) + 1;
-
-    // c, h, s are packed into one dword
-    unsigned short cs = ((c & 0xFF) << 8) | ((c & 0x0300) >> 2) | ((s & 0x003F));  // cylinder and sector -> CX
-    unsigned long chs = (cs << 16) | (h & 0x00FF); // head --> DH
-    return chs;
-}
-
-char readDiskSectors(unsigned long lbaBegin, unsigned long numSec, void* destAddr) {    
+char readDiskSectors(const unsigned long lbaBegin, const unsigned long numSec, const void* destAddr) {    
     char err = 0;
     DapStruct dap;
     for (unsigned long i = 0; i < numSec; i++) {
@@ -144,42 +127,31 @@ char readDiskSectors(unsigned long lbaBegin, unsigned long numSec, void* destAdd
 extern "C" void kmain()
 {
     static VgaBuffer vgaBuffer;
-    const short color = 0x0F00;
-    const char* hello = "Hello cpp world!";
-    unsigned short* vga = (unsigned short*)0xb8000;
-    unsigned long lba_prog = 2048;
-    // unsigned long lba_prog = 1986;
-    unsigned long numSec = 19016;
-    void* lbhAddr = (void*)0x9000;
-    void* protKernelAddr = (void*)0x100000;
-
-    // unsigned long size = 4096;
-
-    for (int i = 0; i<16;++i)
-        vga[i+80] = color | hello[i];
-
+    const unsigned long lba_kernel = (unsigned long)LBA_KERNEL;
+    unsigned long numSec = 0;
+    const void* baseAddr = (void*)RM_KERNEL_BASE_PTR;
+    const void* protKernelAddr = (void*)PM_KERNEL_ADDR;
 
     initBuffer(&vgaBuffer, ' ');
     printBuffer(&vgaBuffer);
 
     // identify postion and size of linux kernel
-    // for this example we assume its at 0xf8400 (= lba 1986) with size of 8785656 bytes (= 17160 sectors)
-
+    // for this example we assume its at 0x10000 (= lba 2048) on the disk with size of 8785656 bytes (= 17160 sectors)
 
     // load linux kernel boot sector (first 512 bytes of kernel image)
     printStr(&vgaBuffer, "Load linux boot sector ...");
-    if (readDiskSectors(lba_prog, 1, lbhAddr) != 0) {
+    if (readDiskSectors(lba_kernel, 1, baseAddr) != 0) {
         printStr(&vgaBuffer, "Error while trying to load linux boot sector.");
         return;
     }
     // check "MZ" signature
-    if (*((unsigned short*)lbhAddr) != 0x5A4D) {
+    if (*((unsigned short*)baseAddr) != 0x5A4D) {
         printStr(&vgaBuffer, "Invalid signature of prog sectors.");
     }
     printStr(&vgaBuffer, "Loaded linux boot sector.");
     
     // map LinuxBootHeader structure onto loaded sector and check signature
-    LinuxBootHeaderStruct* lbh = (LinuxBootHeaderStruct*)((unsigned char*)lbhAddr + 0x1F1);
+    LinuxBootHeaderStruct* lbh = (LinuxBootHeaderStruct*)((unsigned char*)baseAddr + 0x1F1);
     if (lbh->boot_flag != 0xAA55) {
         printStr(&vgaBuffer, "Linux boot flag invalid.");
         return;
@@ -191,7 +163,7 @@ extern "C" void kmain()
         sects = 4;
     }
     printStr(&vgaBuffer, "Load linux real-mode code ...");
-    if (readDiskSectors(lba_prog + 1, sects/*40*/, (char*)lbhAddr + 512) != 0) {
+    if (readDiskSectors(lba_kernel + 1, sects, (char*)baseAddr + 512) != 0) {
         printStr(&vgaBuffer, "Error while trying to load linux real-mode code.");
         return;
     }
@@ -199,79 +171,49 @@ extern "C" void kmain()
 
     // set neccessary parameters of kernel boot sector
     // set type of loader to 0xFF (= undefined)
-    *(((unsigned char*)lbhAddr) + 0x210) = 0xFF;  // loader type
-    // *(((unsigned char*)lbhAddr) + 0x227) = 0x11;  // extended loader type
+    *(((unsigned char*)baseAddr) + 0x210) = 0xFF;  // loader type
+    // *(((unsigned char*)baseAddr) + 0x227) = 0x11;  // extended loader type
 
     // get loadflags
     unsigned char loadflags;
-    loadflags = *(((unsigned char*)lbhAddr) + 0x211);
+    loadflags = *(((unsigned char*)baseAddr) + 0x211);
     if (!(loadflags & (1 << 0))) {
         printStr(&vgaBuffer, "Linux kernels that load at 0x10000 are not supported");
         return;
     }
     loadflags &= ~(1 << 5);     // print early messages
     loadflags |=  (1 << 7);     // can use heap
-    *(((unsigned char*)lbhAddr) + 0x211) = loadflags;
+    *(((unsigned char*)baseAddr) + 0x211) = loadflags;
 
     // set heap_end_ptr (0xFE00)
-    unsigned long real_mode_and_heap_size = 0x8000 + HEAP_SIZE;
-    *(unsigned short*)(((unsigned char*)lbhAddr) + 0x224) = real_mode_and_heap_size - 0x200;
+    const unsigned long real_mode_and_heap_size = 0x8000 + HEAP_SIZE;
+    *(unsigned short*)(((unsigned char*)baseAddr) + 0x224) = real_mode_and_heap_size - 0x200;
 
     // set command line to "auto" and set pointer
-    const char* cmd_line = "root=/dev/sda2 S";
-    // *(((char*)lbhAddr) + 0x10000 + 0) = 'a';
-    // *(((char*)lbhAddr) + 0x10000 + 1) = 'u';
-    // *(((char*)lbhAddr) + 0x10000 + 2) = 't';
-    // *(((char*)lbhAddr) + 0x10000 + 3) = 'o';
-    // *(((char*)lbhAddr) + 0x10000 + 4) = 0;
-    memcpy(((char*)lbhAddr) + 0x10000, (void*)cmd_line, 17);
-    *(unsigned long*)(((unsigned char*)lbhAddr) + 0x228) = (unsigned long)lbhAddr + 0x10000;
+    const char* cmd_line = KERNEL_CMD_LINE;
+    const char* cmd_line_ptr = (char*)baseAddr + real_mode_and_heap_size;
+    memcpy(cmd_line_ptr, (void*)cmd_line, 17);
+    *(unsigned long*)(((unsigned char*)baseAddr) + 0x228) = (unsigned long)cmd_line_ptr;
 
     // get size of protected mode code
-    numSec = *(unsigned long*)(((unsigned char*)lbhAddr) + 0x1F4);
+    numSec = *(unsigned long*)(((unsigned char*)baseAddr) + 0x1F4);
     numSec <<= 4;  // now the size is in bytes
     numSec /= 512;  // now its in sectors
     numSec += 1;
 
     // load protected-mode kernel
     printStr(&vgaBuffer, "Load linux 32bit kernel ...");
-    if (readDiskSectors(lba_prog + sects + 1, numSec, protKernelAddr) != 0) {
+    if (readDiskSectors(lba_kernel + sects + 1, numSec, protKernelAddr) != 0) {
         printStr(&vgaBuffer, "Error while trying to load linux 32bit kernel.");
         return;
     }
     printStr(&vgaBuffer, "Loaded linux 32bit kernel.");
-    
-    // setup correct register values for kernel
 
     // jump to kernel entry point
-    unsigned short real_mode_code_seg = (0x9000 >> 4);
-    unsigned short kernel_entry_seg   = real_mode_code_seg + 0x20;
+    const unsigned short real_mode_code_seg = ((unsigned long)baseAddr >> 4);
+    const unsigned short kernel_entry_seg   = real_mode_code_seg + 0x20;
     printStr(&vgaBuffer, "Calling linux kernel ...");
     callKernel(real_mode_code_seg, kernel_entry_seg, real_mode_and_heap_size);
-    //((void (*)())((unsigned long)lbhAddr + 0x20))();
-
-
-    // printStr(&vgaBuffer, "Load prog ...");
-    // if (readDiskSectors(lba_prog, numSec, lbhAddr) != 0) {
-    //     printStr(&vgaBuffer, "Error while trying to load prog.");
-    //     return;
-    // }
-    // if (*((unsigned char*)lbhAddr + numSec * BYTES_PER_SEC - 1) != 0xDD) {
-    //     printStr(&vgaBuffer, "Invalid signature of prog sectors.");
-    // }
-    // printStr(&vgaBuffer, "Prog loaded");
-    // ((void (*)())0x100000)();
-
-    // // check if sectors read are equal
-    // char* a = (char*)0xE000;
-    // char* b = (char*)0x00100000;
-    // for (int i = 0; i < 512; i++) {
-    //     if (*(a+i) != *(b+i)) {
-    //         printStr(&vgaBuffer, "Memory content is not equal!");
-    //         break;
-    //     }
-    // }
-    // printStr(&vgaBuffer, "Disk read check finished.");
 }
 
 
