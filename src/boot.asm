@@ -14,7 +14,7 @@ boot:
     
     ; load second sector into memory
     mov ah, 0x2    ;read sectors
-    mov al, 7         ;sectors to read
+    mov al, 10         ;sectors to read
     mov ch, 0      ;cylinder idx
     mov dh, 0      ;head idx
     mov cl, 2      ;sector idx
@@ -172,7 +172,6 @@ gdt_pointer:
 CODE_SEG_32 equ gdt_code_32 - gdt_start
 DATA_SEG_32 equ gdt_data_32 - gdt_start
 
-
 times 510 - ($-$$) db 0 ; pad remaining 510 bytes with zeroes
 dw 0xaa55 ; magic bootloader magic - marks this 512 byte sector bootable!
     
@@ -265,6 +264,7 @@ cpy_k_entry_seg: resd 1
 cpy_rm_code_seg: resd 1
 kernel_stack_bottom: equ $
     resb 8192 ; 8 KiB
+    ;resb 16384 ; 16 KiB
 kernel_stack_top:
 global tmp_buffer_ptr
 tmp_buffer_ptr: equ $ 
