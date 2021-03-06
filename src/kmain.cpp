@@ -42,7 +42,7 @@ extern "C" void kmain()
     }
 
     // check and try to read file of linux kernel
-    const char* kernelFilepath[] = {"boot", "vmlinuz", NULL};
+    const char* kernelFilepath[] = {"boot", "depth1", "depth2", "vmlinuz-5.8.0-44-generic", NULL};
     Ext2Fs ext2fs(bootPart);
     if (!ext2fs.fileExists(kernelFilepath)) {
         printStr(&vgaBuffer, "Unable to find linux kernel on file system.");

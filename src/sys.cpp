@@ -86,7 +86,7 @@ unsigned long readDiskSector(const unsigned long lba, const unsigned long offset
     if (err) {
         return 0;
     }
-    *buf = (&tmp_buffer_ptr) + off;
+    *buf = (char*)(&tmp_buffer_ptr) + off;
     unsigned long numRead = BYTES_PER_SEC - off;
     if (numRead > size) {
         numRead = size;
@@ -111,7 +111,7 @@ unsigned long readDisk(const unsigned long lba, const unsigned long offset, cons
         if (delta == 0) {
             return 0;
         }
-        memcpy((char*)(buf) + n, tBuf, delta);
+        memcpy(((char*)buf) + n, (char*)tBuf, delta);
         off = 0;
         n += delta;
         toRead -= delta;

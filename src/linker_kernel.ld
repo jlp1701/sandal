@@ -47,4 +47,4 @@ SECTIONS {
     }
 }
 ASSERT(bss_end < 0x7c00, "Bss section overlaps with text section.");
-ASSERT(data_end - text_start <= 12 * 512, "Stage 1 is too big. Load more sectors at stage 0.")
+ASSERT(data_end - text_start <= 14 * 512, "Stage 1 is too big. Load more sectors at stage 0.")

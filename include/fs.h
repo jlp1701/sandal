@@ -97,6 +97,14 @@ struct __attribute__((__packed__)) DirEntryStub {
     unsigned char type;
 };
 
+struct __attribute__((__packed__)) Ext2ReadStruct {
+    unsigned long offset;
+    unsigned long tOff;
+    unsigned long totalSize;
+    unsigned long readSize;
+    void* destBuf;
+};
+
 class File
 {
 public:
@@ -114,7 +122,7 @@ public:
     Ext2Fs(const MbrPartition*);
     ~Ext2Fs();
 
-    bool getFileHandle(const char** filePath, File* fileHandle);
+    unsigned long readFile(const char** filePath, unsigned long offset, unsigned long size, void* buf);
     bool fileExists(const char** filePath);
     //unsigned long readFile(unsigned long offset, unsigned long size, void* buffer);
 private:
@@ -134,6 +142,8 @@ private:
     unsigned long readBlockData(unsigned long blockIdx, unsigned long offset, unsigned long size, void* buf);
     bool readGroupDesc(unsigned long groupNum, GroupDesc* gd);
     bool searchBlockForDirEntry(unsigned long blockIdx, unsigned long indirectionLvl, unsigned long& remSize, const char* name, DirEntry* dp);
+    bool visitBlock(unsigned long blockIdx, unsigned long indirectionLvl, unsigned long& blockOffset, Ext2ReadStruct* rd);
+    bool readINodeData(INode* iNodeStruct, Ext2ReadStruct* rd);
 };
 
 
