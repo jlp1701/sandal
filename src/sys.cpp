@@ -59,6 +59,17 @@ void memcpy(const void* dest, const void* src, const unsigned long num) {
     }
 }
 
+long strncmp(const char* str1, const char* str2, unsigned long num) {
+    long d = 0;
+    for (unsigned long i = 0; i < num; i++) {
+        d = *(str1 + i) - *(str2 + i);
+        if (d != 0 || (*(str1 + i) == 0 && *(str2 + i) == 0)) {
+            return d;
+        }
+    }
+    return d;
+}
+
 unsigned long readDiskSector(const unsigned long lba, const unsigned long offset, const unsigned long size, const void** buf) {    
     unsigned long i = offset / BYTES_PER_SEC;
     unsigned long off = offset - i * BYTES_PER_SEC;

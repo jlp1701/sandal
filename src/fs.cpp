@@ -11,7 +11,7 @@ unsigned long File::read(unsigned long offset, unsigned long size, void* buffer)
 
 Ext2Fs::Ext2Fs(const MbrPartition* p) {
     this->part = *p;
-    // read superblock
+    // TODO: read superblock
 }
 
 Ext2Fs::~Ext2Fs() {};
@@ -71,20 +71,87 @@ bool Ext2Fs::readINodeEntry(unsigned long inode, INode* inodePtr) {
     readGroupDesc(groupNum, &gd);
 
     // get first INode block
+    unsigned long firstINodeBlock = gd.iNodeBlockStart;
 
-    // get index of INode block
-
-    // get index of INode entry
+    // block offset in INode blocks
+    unsigned long blockOffset = (inode % this->sb.inodesPerGroup) * this->sb.sizeOfINodeStruct;
 
     // read the data into the INode structure
+    if (readBlockData(firstINodeBlock, blockOffset, sizeof(INode), inodePtr) != sizeof(INode)) {
+        return false;
+    }
 
     return true;
 }
 
-unsigned long Ext2Fs::searchDir(INode* dirINodeData, const char* name) {
-    dirINodeData = dirINodeData;
-    name = name;
+bool Ext2Fs::searchBlockForDirEntry(unsigned long blockIdx, unsigned long indirectionLvl, unsigned long& remSize, const char* name, DirEntry* dp) {
+    DirEntryStub ds;
+    if (indirectionLvl == 0) {  // direct
+        unsigned long n = 0;
+        while (n < getBlockSize()) {
+            // get dir entry stub
+            readBlockData(blockIdx, n, sizeof(DirEntryStub), &ds);
+            if (ds.iNode != 0 && (ds.type == DE_TYPE_REGULAR || ds.type == DE_TYPE_DIRECTORY)) {
+                // read name
+                if (ds.entrySize > sizeof(DirEntry)) {
+                    // we have a problem due to static size of names
+                    return false;
+                }
+                // read whole dir entry again
+                readBlockData(blockIdx, n, ds.entrySize, dp);
+                if (strncmp(name, dp->name, ds.nameLen) == 0) {
+                    // entry match!
+                    return true;
+                }
+            }
+            n += ds.entrySize;
+            if (ds.entrySize > remSize) {
+                remSize = 0;
+            } else {
+                remSize -= ds.entrySize;
+            }
+            if (remSize == 0) {
+                // end of size to read and file was not found --> error
+                return false;
+            }
+        }
+    } else if (indirectionLvl > 0) {
+        unsigned long dirBlockIdx = 0;
+        for (unsigned long i = 0; i < getBlockSize(); i += 4) {
+            if (remSize > 0) {
+                readBlockData(blockIdx, i, 4, &dirBlockIdx);
+                if (dirBlockIdx == 0) {
+                    return false;
+                }
+                bool ret = searchBlockForDirEntry(dirBlockIdx, indirectionLvl - 1, remSize, name, dp);
+                if (ret == true) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
+unsigned long Ext2Fs::searchDir(INode* dirINodeData, const char* name) {
+    unsigned long remSize = dirINodeData->sizeLower;  // TODO: handle sizeUpper
+    DirEntry de;
+    // search direct blocks
+    for (unsigned long i; i < 12; i++) {
+        auto ret = searchBlockForDirEntry(dirINodeData->directBlocks[i], 0, remSize, name, &de);
+        if (ret) {
+            return de.iNode;
+        }
+        if (remSize == 0) {
+            return 0;
+        }
+    }
+
+    // search single indirect block
+
+    // search double indirect block
+
+    // seach triple indirect block
     return 0;
 }
 

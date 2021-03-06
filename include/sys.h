@@ -47,6 +47,7 @@ void initBuffer(VgaBuffer* vgaBuf, const char pad);
 void printBuffer(VgaBuffer* vgaBuf);
 void printStr(VgaBuffer* vgaBuf, const char* str);
 void memcpy(const void* dest, const void* src, const unsigned long num);
+long strncmp(const char* str1, const char* str2, unsigned long num);
 unsigned long readDiskSector(const unsigned long lba);
 unsigned long readDiskSector(const unsigned long lba, const unsigned long offset, const unsigned long size, const void** buf);
 unsigned long readDisk(const unsigned long lba, const unsigned long offset, const unsigned long size, const void* buf);

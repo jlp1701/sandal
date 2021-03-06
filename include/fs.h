@@ -79,6 +79,24 @@ struct __attribute__((__packed__)) GroupDesc {
     char _res[14];
 };
 
+#define MAX_NAME_LEN    256
+#define DE_TYPE_REGULAR     1
+#define DE_TYPE_DIRECTORY     2
+struct __attribute__((__packed__)) DirEntry {
+    unsigned long iNode;
+    unsigned short entrySize;
+    unsigned char nameLen;
+    unsigned char type;
+    char name[MAX_NAME_LEN];
+};
+
+struct __attribute__((__packed__)) DirEntryStub {
+    unsigned long iNode;
+    unsigned short entrySize;
+    unsigned char nameLen;
+    unsigned char type;
+};
+
 class File
 {
 public:
@@ -115,6 +133,7 @@ private:
     unsigned long setFileData(unsigned long inode, File* fp);
     unsigned long readBlockData(unsigned long blockIdx, unsigned long offset, unsigned long size, void* buf);
     bool readGroupDesc(unsigned long groupNum, GroupDesc* gd);
+    bool searchBlockForDirEntry(unsigned long blockIdx, unsigned long indirectionLvl, unsigned long& remSize, const char* name, DirEntry* dp);
 };
 
 
