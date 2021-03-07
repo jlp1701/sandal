@@ -33,7 +33,7 @@ install: kernel
 	cp -u $(LIBDIR)/ubuntu.img $(BINDIR)/ubuntu.img
 	cp -u $(LIBDIR)/vmlinuz-5.8.0-44-generic $(BINDIR)/vmlinuz-5.8.0-44-generic
 	cd $(BINDIR)/ && dd conv=notrunc if=kernel.bin of=ubuntu.img bs=1 count=446
-	cd $(BINDIR)/ && dd conv=notrunc if=kernel.bin skip=1 of=ubuntu.img seek=1 bs=512 count=13
+	cd $(BINDIR)/ && dd conv=notrunc if=kernel.bin skip=1 of=ubuntu.img seek=1 bs=512 count=15
 	cd $(BINDIR)/ && dd conv=notrunc if=vmlinuz-5.8.0-44-generic of=ubuntu.img seek=2048 bs=512
 
 runimg: install

@@ -92,7 +92,7 @@ bool Ext2Fs::searchBlockForDirEntry(unsigned long blockIdx, unsigned long indire
                 }
                 // read dir entry with name again
                 readBlockData(blockIdx, n, sizeof(DirEntryStub) + ds.nameLen + 1, dp);
-                if (strncmp(name, dp->name, ds.nameLen) == 0) {
+                if (strncmp(name, dp->name, ds.nameLen) == 0) {  // TODO: check for same length
                     // entry match!
                     return true;
                 }
@@ -261,6 +261,16 @@ unsigned long Ext2Fs::readFile(const char** filePath, unsigned long offset, unsi
         return rd.readSize;
     }
     return 0;
+}
+
+unsigned long Ext2Fs::getFileSize(const char** filePath) {
+    auto iNode = path2INode(2, filePath);
+    if (iNode == 0) {
+        return 0;
+    }
+    INode ne;
+    readINodeEntry(iNode, &ne);
+    return ne.sizeLower;  // TODO: handle sizeUpper
 }
 
 bool Ext2Fs::readGroupDesc(unsigned long groupNum, GroupDesc* gd) {

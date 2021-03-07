@@ -42,22 +42,42 @@ extern "C" void kmain()
     }
 
     // check and try to read file of linux kernel
-    const char* kernelFilepath[] = {"boot", "depth1", "depth2", "vmlinuz-5.8.0-44-generic", NULL};
+    const char* kernelFilepath[] = {"boot", "depth1", "k", NULL};
     Ext2Fs ext2fs(bootPart);
     if (!ext2fs.fileExists(kernelFilepath)) {
         printStr(&vgaBuffer, "Unable to find linux kernel on file system.");
         return;
     }
 
-    // File fKernel;
-    // if (!ext2fs.getFileHandle(kernelFilepath, &fKernel)) {
-    //     printStr(&vgaBuffer, "Could not get file handle to kernel file.");
-    //     return;
-    // }
+    auto kernelFileSize = ext2fs.getFileSize(kernelFilepath);
+    if (kernelFileSize == 0) {
+        printStr(&vgaBuffer, "Invalid kernel file size.");
+        return;   
+    }
+    
+    // load kernel file from lba 2048 at 0x100000 (1 MB)
+    if (readDisk(lba_kernel, 0, kernelFileSize , (void*)0x100000) != kernelFileSize) {
+        printStr(&vgaBuffer, "Error while trying to load linux kernel file (fixed sector).");
+        return;
+    }
+
+    // load kernell file from fs to 0x1000000 (16 MB)
+    if (ext2fs.readFile(kernelFilepath, 0, kernelFileSize, (void*)0x1000000) != kernelFileSize) {
+        printStr(&vgaBuffer, "Error while trying to load linux kernel file (file system).");
+        return;
+    }
+
+    // compare both files
+    for (unsigned long i = 0; i < kernelFileSize; i++) {
+        if (*(((char*)0x100000) + i) != *(((char*)0x1000000) + i)) {
+            printStr(&vgaBuffer, "Files differ.");
+            return;
+        }
+    }
 
     // load linux kernel boot sector (first 512 bytes of kernel image)
     printStr(&vgaBuffer, "Load linux boot sector ...");
-    if (readDisk(lba_kernel, 0, 512, baseAddr) != 512) {
+    if (ext2fs.readFile(kernelFilepath, 0, 512, baseAddr) != 512) {
         printStr(&vgaBuffer, "Error while trying to load linux boot sector.");
         return;
     }
@@ -80,7 +100,7 @@ extern "C" void kmain()
         sects = 4;
     }
     printStr(&vgaBuffer, "Load linux real-mode code ...");
-    if (readDisk(lba_kernel + 1, 0, sects * BYTES_PER_SEC, (char*)baseAddr + 512) != sects * BYTES_PER_SEC) {
+    if (ext2fs.readFile(kernelFilepath, 512, sects * BYTES_PER_SEC, (char*)baseAddr + 512) != sects * BYTES_PER_SEC) {
         printStr(&vgaBuffer, "Error while trying to load linux real-mode code.");
         return;
     }
@@ -120,7 +140,7 @@ extern "C" void kmain()
 
     // load protected-mode kernel
     printStr(&vgaBuffer, "Load linux 32bit kernel ...");
-    if (readDisk(lba_kernel + sects + 1, 0, numSec * BYTES_PER_SEC, protKernelAddr) != numSec * BYTES_PER_SEC) {
+    if (ext2fs.readFile(kernelFilepath, (sects + 1) * BYTES_PER_SEC, numSec * BYTES_PER_SEC, protKernelAddr) != numSec * BYTES_PER_SEC) {
         printStr(&vgaBuffer, "Error while trying to load linux 32bit kernel.");
         return;
     }

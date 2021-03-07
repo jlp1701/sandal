@@ -124,6 +124,7 @@ public:
 
     unsigned long readFile(const char** filePath, unsigned long offset, unsigned long size, void* buf);
     bool fileExists(const char** filePath);
+    unsigned long getFileSize(const char** filePath);
     //unsigned long readFile(unsigned long offset, unsigned long size, void* buffer);
 private:
     MbrPartition part;
