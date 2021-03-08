@@ -70,6 +70,14 @@ long strncmp(const char* str1, const char* str2, unsigned long num) {
     return d;
 }
 
+unsigned long strlen(const char* s) {
+    unsigned long i = 0;
+    while (*(s + i) != 0) {
+        i++;
+    }
+    return i;
+}
+
 unsigned long readDiskSector(const unsigned long lba, const unsigned long offset, const unsigned long size, const void** buf) {    
     unsigned long i = offset / BYTES_PER_SEC;
     unsigned long off = offset - i * BYTES_PER_SEC;

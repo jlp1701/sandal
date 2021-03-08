@@ -91,8 +91,10 @@ bool Ext2Fs::searchBlockForDirEntry(unsigned long blockIdx, unsigned long indire
                     return false;
                 }
                 // read dir entry with name again
-                readBlockData(blockIdx, n, sizeof(DirEntryStub) + ds.nameLen + 1, dp);
-                if (strncmp(name, dp->name, ds.nameLen) == 0) {  // TODO: check for same length
+                readBlockData(blockIdx, n, sizeof(DirEntryStub) + ds.nameLen, dp);
+                // set delimiting NULL at end of string
+                *(dp->name + ds.nameLen) = NULL;
+                if (strlen(name) == strlen(dp->name) && strncmp(name, dp->name, ds.nameLen) == 0) {
                     // entry match!
                     return true;
                 }
