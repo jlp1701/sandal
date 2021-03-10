@@ -2,12 +2,6 @@
 #include <fs.h>
 #include <sys.h>
 
-File::File() {};
-File::~File() {};
-unsigned long File::read(unsigned long offset, unsigned long size, void* buffer) {
-    return offset + size + (unsigned long)buffer;
-}
-
 
 Ext2Fs::Ext2Fs(const MbrPartition* p) {
     this->part = *p;
@@ -15,9 +9,6 @@ Ext2Fs::Ext2Fs(const MbrPartition* p) {
     unsigned long lbaFsStart = this->part.firstLba;
     readDisk(lbaFsStart + 2, 0, sizeof(Ext2SuperBlock), &this->sb);  // superblock is alwas at offset 1024 with length of 1024
 }
-
-Ext2Fs::~Ext2Fs() {};
-
 
 bool Ext2Fs::fileExists(const char** filePath) {
     unsigned long nodeNum = path2INode(2, filePath);  // start at root dir 
@@ -236,12 +227,6 @@ bool Ext2Fs::readINodeData(INode* iNodeStruct, Ext2ReadStruct* rd) {
         return true;
     }
     return false;
-}
-
-unsigned long Ext2Fs::setFileData(unsigned long inode, File* fp) {
-    fp = fp;
-    inode = inode;
-    return 0;
 }
 
 unsigned long Ext2Fs::readFile(const char** filePath, unsigned long offset, unsigned long size, void* buf) {

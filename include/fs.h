@@ -105,22 +105,18 @@ struct __attribute__((__packed__)) Ext2ReadStruct {
     void* destBuf;
 };
 
-class File
+struct Ext2Fs
 {
 public:
-    File();
-    ~File();
-    unsigned long read(unsigned long offset, unsigned long size, void* buffer);
-    FileFragment fragments[MAX_FILE_FRAGMENTS];
-    unsigned long size;
-private:
-};
-
-class Ext2Fs
-{
-public:
+    Ext2Fs() = delete;
     Ext2Fs(const MbrPartition*);
-    ~Ext2Fs();
+    Ext2Fs(const Ext2Fs& o) = delete;
+    Ext2Fs(Ext2Fs&& o) = delete;
+
+    Ext2Fs& operator=(const Ext2Fs& o) = delete;
+    Ext2Fs& operator=(Ext2Fs&& o) = delete;
+
+    ~Ext2Fs() = default;
 
     unsigned long readFile(const char** filePath, unsigned long offset, unsigned long size, void* buf);
     bool fileExists(const char** filePath);
@@ -139,7 +135,6 @@ private:
     unsigned long blockNo2Lba(unsigned long blockNo);
     unsigned long path2INode(unsigned long currNode, const char** filePath);
     unsigned long searchDir(INode* dirInodeData, const char* name);
-    unsigned long setFileData(unsigned long inode, File* fp);
     unsigned long readBlockData(unsigned long blockIdx, unsigned long offset, unsigned long size, void* buf);
     bool readGroupDesc(unsigned long groupNum, GroupDesc* gd);
     bool searchBlockForDirEntry(unsigned long blockIdx, unsigned long indirectionLvl, unsigned long& remSize, const char* name, DirEntry* dp);
